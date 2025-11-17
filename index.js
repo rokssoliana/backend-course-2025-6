@@ -6,43 +6,55 @@ const express = require('express');
 const multer = require('multer');
 const bodyParser = require('body-parser');
 
-// === Commander.js для аргументів командного рядка ===
+// === Commander.js ===
 const program = new Command();
 program
   .requiredOption('-h, --host <host>', 'server host address')
   .requiredOption('-p, --port <port>', 'server port')
   .requiredOption('-c, --cache <path>', 'path to cache directory');
+
 program.parse(process.argv);
 const options = program.opts();
 
-// === Створення директорії кешу ===
+// === Створення директорій ===
 const cacheDir = path.resolve(options.cache);
 if (!fs.existsSync(cacheDir)) fs.mkdirSync(cacheDir, { recursive: true });
+
 const uploadDir = path.join(cacheDir, 'uploads');
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
 
-// === Express і Multer ===
+// === Multer зі збереженням розширення ===
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, uploadDir),
+  filename: (req, file, cb) => {
+    const unique = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    const ext = path.extname(file.originalname) || '.jpg';
+    cb(null, unique + ext);
+  }
+});
+const upload = multer({ storage });
+
+// === Express ===
 const app = express();
-const upload = multer({ dest: uploadDir });
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 
-// === Тимчасове сховище інвентарю ===
+// === Тимчасова база ===
 let inventory = [];
 let nextId = 1;
 
 // === POST /register ===
 app.post('/register', upload.single('photo'), (req, res) => {
   const { inventory_name, description } = req.body;
-  const photo = req.file;
 
-  if (!inventory_name) return res.status(400).json({ error: 'Inventory name is required' });
+  if (!inventory_name)
+    return res.status(400).json({ error: "Inventory name is required" });
 
   const newItem = {
     id: nextId++,
     name: inventory_name,
-    description: description || '',
-    photoPath: photo ? photo.path : null
+    description: description || "",
+    photoPath: req.file ? req.file.path : null
   };
 
   inventory.push(newItem);
@@ -51,20 +63,20 @@ app.post('/register', upload.single('photo'), (req, res) => {
 
 // === GET /inventory ===
 app.get('/inventory', (req, res) => {
-  const result = inventory.map(item => ({
+  const list = inventory.map(item => ({
     id: item.id,
     name: item.name,
     description: item.description,
     photo: item.photoPath ? `/inventory/${item.id}/photo` : null
   }));
-  res.status(200).json(result);
+
+  res.status(200).json(list);
 });
 
 // === GET /inventory/:id ===
 app.get('/inventory/:id', (req, res) => {
-  const id = parseInt(req.params.id);
-  const item = inventory.find(i => i.id === id);
-  if (!item) return res.status(404).json({ error: 'Not found' });
+  const item = inventory.find(i => i.id === parseInt(req.params.id));
+  if (!item) return res.status(404).json({ error: "Not found" });
 
   res.status(200).json({
     id: item.id,
@@ -76,9 +88,8 @@ app.get('/inventory/:id', (req, res) => {
 
 // === PUT /inventory/:id ===
 app.put('/inventory/:id', (req, res) => {
-  const id = parseInt(req.params.id);
-  const item = inventory.find(i => i.id === id);
-  if (!item) return res.status(404).json({ error: 'Not found' });
+  const item = inventory.find(i => i.id === parseInt(req.params.id));
+  if (!item) return res.status(404).json({ error: "Not found" });
 
   const { name, description } = req.body;
   if (name) item.name = name;
@@ -89,39 +100,46 @@ app.put('/inventory/:id', (req, res) => {
 
 // === GET /inventory/:id/photo ===
 app.get('/inventory/:id/photo', (req, res) => {
-  const id = parseInt(req.params.id);
-  const item = inventory.find(i => i.id === id);
-  if (!item || !item.photoPath || !fs.existsSync(item.photoPath)) return res.status(404).send('Not found');
+  const item = inventory.find(i => i.id === parseInt(req.params.id));
 
-  res.sendFile(path.resolve(item.photoPath), { headers: { 'Content-Type': 'image/jpeg' } });
+  if (!item || !item.photoPath || !fs.existsSync(item.photoPath))
+    return res.status(404).send("Not found");
+
+  res.sendFile(path.resolve(item.photoPath), {
+    headers: { "Content-Type": "image/jpeg" }
+  });
 });
 
 // === PUT /inventory/:id/photo ===
 app.put('/inventory/:id/photo', upload.single('photo'), (req, res) => {
-  const id = parseInt(req.params.id);
-  const item = inventory.find(i => i.id === id);
-  if (!item) return res.status(404).json({ error: 'Not found' });
+  const item = inventory.find(i => i.id === parseInt(req.params.id));
+  if (!item) return res.status(404).json({ error: "Not found" });
 
-  if (req.file) item.photoPath = req.file.path;
-  res.status(200).json(item);
+  if (!req.file)
+    return res.status(400).json({ error: "No file uploaded" });
+
+  item.photoPath = req.file.path;
+
+  res.status(200).json({
+    message: "Photo updated",
+    photo: `/inventory/${item.id}/photo`
+  });
 });
 
 // === DELETE /inventory/:id ===
 app.delete('/inventory/:id', (req, res) => {
-  const id = parseInt(req.params.id);
-  const index = inventory.findIndex(i => i.id === id);
-  if (index === -1) return res.status(404).json({ error: 'Not found' });
+  const index = inventory.findIndex(i => i.id === parseInt(req.params.id));
+  if (index === -1) return res.status(404).json({ error: "Not found" });
 
   inventory.splice(index, 1);
-  res.status(200).json({ message: 'Deleted' });
+  res.status(200).json({ message: "Deleted" });
 });
 
-// === GET /RegisterForm.html ===
+// === HTML форми ===
 app.get('/RegisterForm.html', (req, res) => {
   res.sendFile(path.join(__dirname, 'RegisterForm.html'));
 });
 
-// === GET /SearchForm.html ===
 app.get('/SearchForm.html', (req, res) => {
   res.sendFile(path.join(__dirname, 'SearchForm.html'));
 });
@@ -130,7 +148,8 @@ app.get('/SearchForm.html', (req, res) => {
 app.post('/search', (req, res) => {
   const { id, has_photo } = req.body;
   const item = inventory.find(i => i.id === parseInt(id));
-  if (!item) return res.status(404).json({ error: 'Not found' });
+
+  if (!item) return res.status(404).json({ error: "Not found" });
 
   const result = {
     id: item.id,
@@ -138,18 +157,18 @@ app.post('/search', (req, res) => {
     description: item.description
   };
 
-  if (has_photo === 'on' && item.photoPath) {
+  if (has_photo === "on" && item.photoPath)
     result.photo = `/inventory/${item.id}/photo`;
-  }
 
   res.status(200).json(result);
 });
 
+// === Обробка інших методів ===
 app.all('/*', (req, res) => {
-  res.status(405).send('Method Not Allowed');
+  res.status(405).send("Method Not Allowed");
 });
 
 // === Запуск сервера ===
 app.listen(parseInt(options.port), options.host, () => {
-  console.log(`Server listening at http://${options.host}:${options.port}`);
+  console.log(`Server running at http://${options.host}:${options.port}`);
 });
