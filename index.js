@@ -62,17 +62,17 @@ app.post('/register', upload.single('photo'), (req, res) => {
   res.status(201).json(newItem);
 });
 
-// === GET /inventory ===
+//GET /inventory
 app.get('/inventory', (req, res) => res.json(inventory));
 
-// === GET /inventory/:id ===
+//GET /inventory/:id
 app.get('/inventory/:id', (req, res) => {
   const item = inventory.find(i => i.id === parseInt(req.params.id));
   if (!item) return res.status(404).json({ error: "Not found" });
   res.json(item);
 });
 
-// === PUT /inventory/:id ===
+//PUT /inventory/:id
 app.put('/inventory/:id', (req, res) => {
   const item = inventory.find(i => i.id === parseInt(req.params.id));
   if (!item) return res.status(404).json({ error: "Not found" });
@@ -84,7 +84,7 @@ app.put('/inventory/:id', (req, res) => {
   res.json(item);
 });
 
-// === PUT /inventory/:id/photo ===
+//PUT /inventory/:id/photo
 app.put('/inventory/:id/photo', upload.single('photo'), (req, res) => {
   const item = inventory.find(i => i.id === parseInt(req.params.id));
   if (!item) return res.status(404).json({ error: "Not found" });
@@ -94,7 +94,7 @@ app.put('/inventory/:id/photo', upload.single('photo'), (req, res) => {
   res.json({ message: "Photo updated", photo: item.photo });
 });
 
-// === DELETE /inventory/:id ===
+//DELETE /inventory/:id 
 app.delete('/inventory/:id', (req, res) => {
   const index = inventory.findIndex(i => i.id === parseInt(req.params.id));
   if (index === -1) return res.status(404).json({ error: "Not found" });
@@ -103,7 +103,7 @@ app.delete('/inventory/:id', (req, res) => {
   res.json({ message: "Deleted" });
 });
 
-// === POST /search ===
+//POST /search
 app.post('/search', (req, res) => {
   const { id, has_photo } = req.body;
   const item = inventory.find(i => i.id === parseInt(id));
