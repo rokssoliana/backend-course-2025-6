@@ -37,8 +37,8 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Swagger
-const swaggerDocument = YAML.load(path.join(__dirname, 'swagger.yaml'));
-app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+//const swaggerDocument = YAML.load(path.join(__dirname, 'swagger.yaml'));
+//app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
 let inventory = [];
 let nextId = 1;
