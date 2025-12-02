@@ -37,8 +37,11 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Swagger
-//const swaggerDocument = YAML.load(path.join(__dirname, 'swagger.yaml'));
-//app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+const swaggerPath = path.join(__dirname, 'swagger.yaml');
+if (fs.existsSync(swaggerPath)) {
+  const swaggerDocument = YAML.load(swaggerPath);
+  app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+}
 
 let inventory = [];
 let nextId = 1;
@@ -60,9 +63,7 @@ app.post('/register', upload.single('photo'), (req, res) => {
 });
 
 // === GET /inventory ===
-app.get('/inventory', (req, res) => {
-  res.json(inventory);
-});
+app.get('/inventory', (req, res) => res.json(inventory));
 
 // === GET /inventory/:id ===
 app.get('/inventory/:id', (req, res) => {
