@@ -123,9 +123,9 @@ app.post('/search', (req, res) => {
 });
 
 // === Обробка інших методів ===
-//app.all('/*', (req, res) => {
-  //res.status(405).send("Method Not Allowed");
-//});
+app.all('/*', (req, res) => {
+   res.status(405).send("Method Not Allowed");
+});
 
 app.listen(parseInt(options.port), options.host, () => {
   console.log(`Server running at http://${options.host}:${options.port}`);
