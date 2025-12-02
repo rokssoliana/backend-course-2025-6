@@ -3,7 +3,6 @@ const fs = require('fs');
 const path = require('path');
 const express = require('express');
 const multer = require('multer');
-const bodyParser = require('body-parser');
 const swaggerUi = require('swagger-ui-express');
 const YAML = require('yamljs');
 
@@ -37,7 +36,7 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Підключення Swagger документації
+// Swagger
 const swaggerDocument = YAML.load(path.join(__dirname, 'swagger.yaml'));
 app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
@@ -47,10 +46,7 @@ let nextId = 1;
 // === POST /register ===
 app.post('/register', upload.single('photo'), (req, res) => {
   const { inventory_name, description } = req.body;
-
-  if (!inventory_name) {
-    return res.status(400).json({ error: "inventory_name is required" });
-  }
+  if (!inventory_name) return res.status(400).json({ error: "inventory_name is required" });
 
   const newItem = {
     id: nextId++,
@@ -65,20 +61,14 @@ app.post('/register', upload.single('photo'), (req, res) => {
 
 // === GET /inventory ===
 app.get('/inventory', (req, res) => {
-  const list = inventory.map(item => ({
-    id: item.id,
-    name: item.name,
-    description: item.description,
-    photo: item.photo
-  }));
-  res.status(200).json(list);
+  res.json(inventory);
 });
 
 // === GET /inventory/:id ===
 app.get('/inventory/:id', (req, res) => {
   const item = inventory.find(i => i.id === parseInt(req.params.id));
   if (!item) return res.status(404).json({ error: "Not found" });
-  res.status(200).json(item);
+  res.json(item);
 });
 
 // === PUT /inventory/:id ===
@@ -90,18 +80,17 @@ app.put('/inventory/:id', (req, res) => {
   if (name) item.name = name;
   if (description) item.description = description;
 
-  res.status(200).json(item);
+  res.json(item);
 });
 
 // === PUT /inventory/:id/photo ===
 app.put('/inventory/:id/photo', upload.single('photo'), (req, res) => {
   const item = inventory.find(i => i.id === parseInt(req.params.id));
   if (!item) return res.status(404).json({ error: "Not found" });
-
   if (!req.file) return res.status(400).json({ error: "No file uploaded" });
 
   item.photo = `/uploads/${req.file.filename}`;
-  res.status(200).json({ message: "Photo updated", photo: item.photo });
+  res.json({ message: "Photo updated", photo: item.photo });
 });
 
 // === DELETE /inventory/:id ===
@@ -110,7 +99,7 @@ app.delete('/inventory/:id', (req, res) => {
   if (index === -1) return res.status(404).json({ error: "Not found" });
 
   inventory.splice(index, 1);
-  res.status(200).json({ message: "Deleted" });
+  res.json({ message: "Deleted" });
 });
 
 // === POST /search ===
@@ -119,21 +108,16 @@ app.post('/search', (req, res) => {
   const item = inventory.find(i => i.id === parseInt(id));
   if (!item) return res.status(404).json({ error: "Not found" });
 
-  const result = {
-    id: item.id,
-    name: item.name,
-    description: item.description
-  };
+  const result = { id: item.id, name: item.name, description: item.description };
   if (has_photo === "on" && item.photo) result.photo = item.photo;
 
-  res.status(200).json(result);
+  res.json(result);
 });
 
-// === Обробка інших методів ===
-app.use((req, res) => {
-  res.status(405).send('Method Not Allowed');
-});
+// Обробка інших методів
+app.all('*', (req, res) => res.status(405).send('Method Not Allowed'));
 
+// Запуск сервера
 app.listen(parseInt(options.port), options.host, () => {
   console.log(`Server running at http://${options.host}:${options.port}`);
 });
