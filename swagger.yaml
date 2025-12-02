@@ -1,0 +1,194 @@
+openapi: 3.0.0
+info:
+  title: Inventory API
+  version: 1.0.0
+  description: API для управління інвентаризацією пристроїв
+
+servers:
+  - url: http://localhost:3000
+
+paths:
+
+  /register:
+    post:
+      summary: Додає новий пристрій
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - inventory_name
+              properties:
+                inventory_name:
+                  type: string
+                description:
+                  type: string
+                photo:
+                  type: string
+                  format: binary
+      responses:
+        '201':
+          description: Пристрій додано
+        '400':
+          description: Некоректні дані
+
+  /inventory:
+    get:
+      summary: Повертає список всіх пристроїв
+      responses:
+        '200':
+          description: Список пристроїв
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/InventoryItem'
+
+  /inventory/{id}:
+    get:
+      summary: Повертає конкретний пристрій за ID
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: integer
+          required: true
+          description: ID пристрою
+      responses:
+        '200':
+          description: Пристрій знайдено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InventoryItem'
+        '404':
+          description: Не знайдено
+
+    put:
+      summary: Оновлює ім'я або опис пристрою
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: integer
+          required: true
+          description: ID пристрою
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                description:
+                  type: string
+      responses:
+        '200':
+          description: Оновлено
+        '404':
+          description: Не знайдено
+
+    delete:
+      summary: Видаляє пристрій
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: integer
+          required: true
+          description: ID пристрою
+      responses:
+        '200':
+          description: Видалено
+        '404':
+          description: Не знайдено
+
+  /inventory/{id}/photo:
+    get:
+      summary: Повертає фото пристрою
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: integer
+          required: true
+          description: ID пристрою
+      responses:
+        '200':
+          description: Фото пристрою
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: Не знайдено
+
+    put:
+      summary: Оновлює фото пристрою
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: integer
+          required: true
+          description: ID пристрою
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                photo:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: Фото оновлено
+        '404':
+          description: Не знайдено
+
+  /search:
+    post:
+      summary: Пошук пристрою за ID
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                id:
+                  type: integer
+                has_photo:
+                  type: string
+      responses:
+        '200':
+          description: Результат пошуку
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InventoryItem'
+        '404':
+          description: Не знайдено
+
+components:
+  schemas:
+    InventoryItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        description:
+          type: string
+        photo:
+          type: string
+          format: uri

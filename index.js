@@ -3,6 +3,12 @@ const fs = require('fs');
 const path = require('path');
 const express = require('express');
 const multer = require('multer');
+<<<<<<< HEAD
+=======
+const bodyParser = require('body-parser');
+const swaggerUi = require('swagger-ui-express');
+const YAML = require('yamljs');
+>>>>>>> 46a406b (Save local changes and add Postman collection)
 
 const program = new Command();
 program
@@ -122,9 +128,19 @@ app.post('/search', (req, res) => {
   res.status(200).json(result);
 });
 
+<<<<<<< HEAD
 // === Обробка інших методів ===
 app.all('/*', (req, res) => {
    res.status(405).send("Method Not Allowed");
+=======
+// === Підключення Swagger документації ===
+const swaggerDocument = YAML.load(path.join(__dirname, 'swagger.yaml'));
+app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+
+// === Обробка інших методів ===
+app.use((req, res) => {
+  res.status(405).send('Method Not Allowed');
+>>>>>>> 46a406b (Save local changes and add Postman collection)
 });
 
 app.listen(parseInt(options.port), options.host, () => {

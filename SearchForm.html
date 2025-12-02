@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Search Device</title>
+</head>
+<body>
+    <h1>Search Device</h1>
+    <form action="/search" method="POST">
+        <label for="id">Device ID:</label>
+        <input type="text" name="id" id="id" required><br><br>
+
+        <label for="has_photo">Include Photo Link:</label>
+        <input type="checkbox" name="has_photo" id="has_photo"><br><br>
+
+        <button type="submit">Search</button>
+    </form>
+</body>
+</html>
