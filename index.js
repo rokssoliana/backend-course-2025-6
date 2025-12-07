@@ -1,37 +1,34 @@
-const { Command } = require('commander');
-const fs = require('fs');
-const path = require('path');
-const express = require('express');
-const multer = require('multer');
-<<<<<<< HEAD
-=======
-const bodyParser = require('body-parser');
-const swaggerUi = require('swagger-ui-express');
-const YAML = require('yamljs');
->>>>>>> 46a406b (Save local changes and add Postman collection)
+const { Command } = require("commander");
+const fs = require("fs");
+const path = require("path");
+const express = require("express");
+const multer = require("multer");
+const swaggerUi = require("swagger-ui-express");
+const YAML = require("yamljs");
 
 const program = new Command();
 program
-  .requiredOption('-h, --host <host>', 'server host address')
-  .requiredOption('-p, --port <port>', 'server port')
-  .requiredOption('-c, --cache <path>', 'path to cache directory');
+  .requiredOption("-h, --host <host>", "server host address")
+  .requiredOption("-p, --port <port>", "server port")
+  .requiredOption("-c, --cache <path>", "path to cache directory");
 
 program.parse(process.argv);
 const options = program.opts();
 
+// Create cache + uploads
 const cacheDir = path.resolve(options.cache);
 if (!fs.existsSync(cacheDir)) fs.mkdirSync(cacheDir, { recursive: true });
 
-const uploadDir = path.join(cacheDir, 'uploads');
+const uploadDir = path.join(cacheDir, "uploads");
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
 
-// Multer для файлів
+// Multer config
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, uploadDir),
   filename: (req, file, cb) => {
-    const unique = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    const ext = path.extname(file.originalname) || '.jpg';
-    cb(null, unique + ext);
+    const name = Date.now() + "-" + Math.round(Math.random() * 1e9);
+    const ext = path.extname(file.originalname) || ".jpg";
+    cb(null, name + ext);
   }
 });
 const upload = multer({ storage });
@@ -40,109 +37,77 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Serve HTML forms
+app.use(express.static(__dirname));
+
+// Додаємо шлях до uploads
+app.use('/uploads', express.static(uploadDir));
+
+// Swagger
+const swaggerDoc = YAML.load(path.join(__dirname, "swagger.yaml"));
+app.use("/docs", swaggerUi.serve, swaggerUi.setup(swaggerDoc));
+
+// In-memory DB
 let inventory = [];
 let nextId = 1;
 
-// === POST /register ===
-app.post('/register', upload.single('photo'), (req, res) => {
+/* ===========================
+      POST /register
+=========================== */
+app.post("/register", upload.single("photo"), (req, res) => {
   const { inventory_name, description } = req.body;
 
-  if (!inventory_name) {
-    return res.status(400).json({ error: "inventory_name is required" });
-  }
+  if (!inventory_name)
+    return res.status(400).json({ error: "inventory_name required" });
 
-  const newItem = {
+  const item = {
     id: nextId++,
     name: inventory_name,
     description: description || "",
-    photo: req.file ? `/uploads/${req.file.filename}` : null
+    photo: req.file ? "/uploads/" + req.file.filename : null
   };
 
-  inventory.push(newItem);
-  res.status(201).json(newItem);
+  inventory.push(item);
+  res.status(201).json(item);
 });
 
-// === GET /inventory ===
-app.get('/inventory', (req, res) => {
-  const list = inventory.map(item => ({
-    id: item.id,
-    name: item.name,
-    description: item.description,
-    photo: item.photo
-  }));
-  res.status(200).json(list);
-});
-
-// === GET /inventory/:id ===
-app.get('/inventory/:id', (req, res) => {
-  const item = inventory.find(i => i.id === parseInt(req.params.id));
-  if (!item) return res.status(404).json({ error: "Not found" });
-  res.status(200).json(item);
-});
-
-// === PUT /inventory/:id ===
-app.put('/inventory/:id', (req, res) => {
-  const item = inventory.find(i => i.id === parseInt(req.params.id));
-  if (!item) return res.status(404).json({ error: "Not found" });
-
-  const { name, description } = req.body;
-  if (name) item.name = name;
-  if (description) item.description = description;
-
-  res.status(200).json(item);
-});
-
-// === PUT /inventory/:id/photo ===
-app.put('/inventory/:id/photo', upload.single('photo'), (req, res) => {
-  const item = inventory.find(i => i.id === parseInt(req.params.id));
-  if (!item) return res.status(404).json({ error: "Not found" });
-
-  if (!req.file) return res.status(400).json({ error: "No file uploaded" });
-
-  item.photo = `/uploads/${req.file.filename}`;
-  res.status(200).json({ message: "Photo updated", photo: item.photo });
-});
-
-// === DELETE /inventory/:id ===
-app.delete('/inventory/:id', (req, res) => {
-  const index = inventory.findIndex(i => i.id === parseInt(req.params.id));
-  if (index === -1) return res.status(404).json({ error: "Not found" });
-
-  inventory.splice(index, 1);
-  res.status(200).json({ message: "Deleted" });
-});
-
-// === POST /search ===
-app.post('/search', (req, res) => {
+/* ===========================
+      POST /search
+=========================== */
+app.post("/search", (req, res) => {
   const { id, has_photo } = req.body;
+
   const item = inventory.find(i => i.id === parseInt(id));
   if (!item) return res.status(404).json({ error: "Not found" });
 
   const result = {
     id: item.id,
     name: item.name,
-    description: item.description
+    description: item.description,
   };
+
   if (has_photo === "on" && item.photo) result.photo = item.photo;
 
-  res.status(200).json(result);
+  res.json(result);
 });
 
-<<<<<<< HEAD
-// === Обробка інших методів ===
-app.all('/*', (req, res) => {
-   res.status(405).send("Method Not Allowed");
-=======
-// === Підключення Swagger документації ===
-const swaggerDocument = YAML.load(path.join(__dirname, 'swagger.yaml'));
-app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+/* ===========================
+   GET /inventory (just in case)
+=========================== */
+app.get("/inventory", (req, res) => {
+  res.json(inventory);
+});
 
-// === Обробка інших методів ===
+/* ===========================
+   ERROR HANDLER — ONLY ONE
+=========================== */
 app.use((req, res) => {
-  res.status(405).send('Method Not Allowed');
->>>>>>> 46a406b (Save local changes and add Postman collection)
+  res.status(405).send("Method Not Allowed");
 });
 
+/* ===========================
+   START SERVER
+=========================== */
 app.listen(parseInt(options.port), options.host, () => {
   console.log(`Server running at http://${options.host}:${options.port}`);
 });
