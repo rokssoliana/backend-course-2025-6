@@ -6,6 +6,7 @@ const multer = require('multer');
 const swaggerUi = require('swagger-ui-express');
 const YAML = require('yamljs');
 
+// Парсинг аргументів командного рядка
 const program = new Command();
 program
   .requiredOption('-h, --host <host>', 'server host address')
@@ -15,12 +16,14 @@ program
 program.parse(process.argv);
 const options = program.opts();
 
+// Налаштування каталогів для кешу та завантажених файлів
 const cacheDir = path.resolve(options.cache);
 if (!fs.existsSync(cacheDir)) fs.mkdirSync(cacheDir, { recursive: true });
 
 const uploadDir = path.join(cacheDir, 'uploads');
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
 
+// Multer для завантаження файлів
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, uploadDir),
   filename: (req, file, cb) => {
@@ -39,9 +42,11 @@ app.use(express.urlencoded({ extended: true }));
 const swaggerDocument = YAML.load(path.join(__dirname, 'swagger.yaml'));
 app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
+// Дані інвентарю
 let inventory = [];
 let nextId = 1;
 
+// Роутинг
 app.post('/register', upload.single('photo'), (req, res) => {
   const { inventory_name, description } = req.body;
   if (!inventory_name) return res.status(400).json({ error: "inventory_name is required" });
@@ -97,8 +102,12 @@ app.post('/search', (req, res) => {
   res.json(result);
 });
 
-app.all('*', (req, res) => res.status(405).send('Method Not Allowed'));
+// Обробка всіх неопрацьованих маршрутів
+app.use((req, res) => {
+  res.status(405).send('Method Not Allowed');
+});
 
+// Запуск сервера
 app.listen(parseInt(options.port), options.host, () => {
   console.log(`Server running at http://${options.host}:${options.port}`);
 });
