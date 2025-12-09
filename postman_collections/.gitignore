@@ -1,0 +1,16 @@
+# Node.js dependencies
+node_modules/
+
+# Environment variables
+.env
+
+# Uploads and cache
+cache/
+uploads/
+
+# Старі ЛР6 файли, якщо ще лишились
+backend-course-2025-6/
+
+# IDE/Editor
+.vscode/
+.idea/

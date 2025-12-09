@@ -1,33 +1,30 @@
-version: "3.9"
-
 services:
-  app:
-    build: .
-    container_name: backend-app
-    ports:
-      - "3000:3000"
-    volumes:
-      - .:/app
-      - /app/node_modules
-    environment:
-      - PORT=3000
-      - DB_HOST=db
-      - DB_USER=postgres
-      - DB_PASSWORD=postgres
-      - DB_NAME=backend_db
-    depends_on:
-      - db
-
-  db:
+  backend-db:
     image: postgres:16
-    container_name: backend-db
-    restart: always
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: backend_db
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: mydb
+    ports:
+      - "5432:5432"
     volumes:
-      - db_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
 
-volumes:
-  db_data:
+  backend-app:
+    build: .
+    ports:
+      - "3000:3000"   # HTTP API
+      - "9229:9229"   # DEBUG (Chrome DevTools)
+    depends_on:
+      - backend-db
+    volumes:
+      - .:/app        # важливо для HOT RELOAD (nodemon)
+    environment:
+      - SERVER_HOST=0.0.0.0
+      - SERVER_PORT=3000
+      - CACHE_DIR=./cache
+      - DB_HOST=backend-db
+      - DB_PORT=5432
+      - DB_USER=user
+      - DB_PASSWORD=password
+      - DB_NAME=mydb

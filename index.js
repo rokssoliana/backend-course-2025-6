@@ -1,113 +1,146 @@
-const { Command } = require('commander');
-const fs = require('fs');
-const path = require('path');
+require('dotenv').config();
 const express = require('express');
 const multer = require('multer');
-const swaggerUi = require('swagger-ui-express');
-const YAML = require('yamljs');
-
-// Парсинг аргументів командного рядка
-const program = new Command();
-program
-  .requiredOption('-h, --host <host>', 'server host address')
-  .requiredOption('-p, --port <port>', 'server port')
-  .requiredOption('-c, --cache <path>', 'path to cache directory');
-
-program.parse(process.argv);
-const options = program.opts();
-
-// Налаштування каталогів для кешу та завантажених файлів
-const cacheDir = path.resolve(options.cache);
-if (!fs.existsSync(cacheDir)) fs.mkdirSync(cacheDir, { recursive: true });
-
-const uploadDir = path.join(cacheDir, 'uploads');
-if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
-
-// Multer для завантаження файлів
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, uploadDir),
-  filename: (req, file, cb) => {
-    const unique = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    const ext = path.extname(file.originalname) || '.jpg';
-    cb(null, unique + ext);
-  }
-});
-const upload = multer({ storage });
+const path = require('path');
+const { Pool } = require('pg');
 
 const app = express();
+const port = process.env.SERVER_PORT || 3000;
+const host = process.env.SERVER_HOST || '0.0.0.0';
+
+// Middleware для JSON та форм
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Swagger
-const swaggerDocument = YAML.load(path.join(__dirname, 'swagger.yaml'));
-app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, path.join(__dirname, 'uploads'));
+  },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname);     // .jpg .png etc
+    const unique = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    cb(null, unique + ext);
+  }
+});
 
-// Дані інвентарю
-let inventory = [];
-let nextId = 1;
+const upload = multer({ storage });
 
-// Роутинг
-app.post('/register', upload.single('photo'), (req, res) => {
+// Додавання статичної папки для доступу до фото
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+// Підключення до Postgres
+const pool = new Pool({
+  host: process.env.DB_HOST,
+  port: parseInt(process.env.DB_PORT),
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
+  database: process.env.DB_NAME,
+});
+
+pool.connect()
+  .then(() => console.log('✅ DB connected'))
+  .catch(err => console.error('DB init error:', err));
+
+// ------------------- API ------------------- //
+
+// CREATE: POST /inventory
+app.post('/inventory', upload.single('photo'), async (req, res) => {
   const { inventory_name, description } = req.body;
   if (!inventory_name) return res.status(400).json({ error: "inventory_name is required" });
 
-  const newItem = {
-    id: nextId++,
-    name: inventory_name,
-    description: description || "",
-    photo: req.file ? `/uploads/${req.file.filename}` : null
-  };
+  const photo = req.file ? `/uploads/${req.file.filename}` : null;
 
-  inventory.push(newItem);
-  res.status(201).json(newItem);
+  try {
+    const result = await pool.query(
+      'INSERT INTO inventory (name, description, photo) VALUES ($1, $2, $3) RETURNING *',
+      [inventory_name, description || '', photo]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-app.get('/inventory', (req, res) => res.json(inventory));
-app.get('/inventory/:id', (req, res) => {
-  const item = inventory.find(i => i.id === parseInt(req.params.id));
-  if (!item) return res.status(404).json({ error: "Not found" });
-  res.json(item);
+// READ ALL: GET /inventory
+app.get('/inventory', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM inventory');
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-app.put('/inventory/:id', (req, res) => {
-  const item = inventory.find(i => i.id === parseInt(req.params.id));
-  if (!item) return res.status(404).json({ error: "Not found" });
-  const { name, description } = req.body;
-  if (name) item.name = name;
-  if (description) item.description = description;
-  res.json(item);
+// READ ONE: GET /inventory/:id
+app.get('/inventory/:id', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const result = await pool.query('SELECT * FROM inventory WHERE id=$1', [id]);
+    if (!result.rows.length) return res.status(404).json({ error: "Not found" });
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-app.put('/inventory/:id/photo', upload.single('photo'), (req, res) => {
-  const item = inventory.find(i => i.id === parseInt(req.params.id));
-  if (!item) return res.status(404).json({ error: "Not found" });
-  if (!req.file) return res.status(400).json({ error: "No file uploaded" });
-  item.photo = `/uploads/${req.file.filename}`;
-  res.json({ message: "Photo updated", photo: item.photo });
+// UPDATE: PUT /inventory/:id
+app.put('/inventory/:id', upload.single('photo'), async (req, res) => {
+  const { id } = req.params;
+  const { inventory_name, description } = req.body;
+  const photo = req.file ? `/uploads/${req.file.filename}` : null;
+
+  try {
+    const fields = [];
+    const values = [];
+    let idx = 1;
+
+    if (inventory_name) { fields.push(`name=$${idx++}`); values.push(inventory_name); }
+    if (description) { fields.push(`description=$${idx++}`); values.push(description); }
+    if (photo) { fields.push(`photo=$${idx++}`); values.push(photo); }
+
+    if (!fields.length) return res.status(400).json({ error: "Nothing to update" });
+
+    values.push(id);
+
+    const result = await pool.query(
+      `UPDATE inventory SET ${fields.join(', ')} WHERE id=$${idx} RETURNING *`,
+      values
+    );
+
+    if (!result.rows.length) return res.status(404).json({ error: "Not found" });
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-app.delete('/inventory/:id', (req, res) => {
-  const index = inventory.findIndex(i => i.id === parseInt(req.params.id));
-  if (index === -1) return res.status(404).json({ error: "Not found" });
-  inventory.splice(index, 1);
-  res.json({ message: "Deleted" });
+// DELETE: DELETE /inventory/:id
+app.delete('/inventory/:id', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const result = await pool.query('DELETE FROM inventory WHERE id=$1 RETURNING *', [id]);
+
+    if (!result.rows.length) return res.status(404).json({ error: "Not found" });
+
+    res.json({ message: "Deleted", device: result.rows[0] });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-app.post('/search', (req, res) => {
-  const { id, has_photo } = req.body;
-  const item = inventory.find(i => i.id === parseInt(id));
-  if (!item) return res.status(404).json({ error: "Not found" });
-  const result = { id: item.id, name: item.name, description: item.description };
-  if (has_photo === "on" && item.photo) result.photo = item.photo;
-  res.json(result);
+// Root route
+app.get('/', (req, res) => {
+  res.send('Inventory API is running. Nodemon test OK!');
 });
 
-// Обробка всіх неопрацьованих маршрутів
+// Catch-all
 app.use((req, res) => {
   res.status(405).send('Method Not Allowed');
 });
 
-// Запуск сервера
-app.listen(parseInt(options.port), options.host, () => {
-  console.log(`Server running at http://${options.host}:${options.port}`);
+// ------------------- Start server ------------------- //
+app.listen(port, host, () => {
+  console.log(`Server running at http://${host}:${port}`);
 });
